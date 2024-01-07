@@ -1,0 +1,9 @@
+numpy
+pandas
+ta
+matplotlib
+yfinance
+quantstats
+ipython
+# webbrowser
+
