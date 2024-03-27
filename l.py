@@ -94,20 +94,69 @@ class OtherStrategy():
         return signal
 
     def run(self):
-        result = self.download_data()
-        self.calculate_trading_days(result)
-        equity_curve = self.calculate(result)
+        self.result = self.download_data()
+        self.calculate_trading_days(self.result)
+        equity_curve = self.calculate(self.result)
+        self.result = equity_curve
 
         plt.plot(equity_curve['Cumulative Returns'])
+        return equity_curve
     def calculate(self, result):
         my_strategy_signal = self.my_strategy_signal(result)
         result['Signal'] = my_strategy_signal
         equity_curve = self.get_equity_curve2(result)
         return equity_curve
-    def get_psar(self, data):
-        myindicator = ta.trend.PSARIndicator(data.High, data.Low, data.Close)
-        psar_series = myindicator.psar()
-        return psar_series
+    def get_signals(self, data, indicator):
+        signal = np.where(data.Close > indicator, 1, np.where(data.Close < indicator, -1, 0))
+        return signal
+    def get_equity_curve(self, data):
+        data['Daily Returns'] = data['Close'].pct_change() * data['Signal'].shift(1)
+        # data['Cumulative Returns'] = (1.0 * data['Daily Returns']).cumprod() * 100.0
+        data['Cumulative Returns'] = (1.0 + data['Daily Returns']).cumprod()
+        data['Benchmark'] = data['Close'] / data['Close'].iloc[0] * 100.
+        return data
+
+    def get_equity_curve2(self, data):
+        data['Daily Returns'] = data['Close'].pct_change() * data['Signal']
+        # data['Cumulative Returns'] = (1.0 * data['Daily Returns']).cumprod() * 100.0
+        data['Cumulative Returns'] = (1.0 + data['Daily Returns']).cumprod()
+        data['Benchmark'] = data['Close'] / data['Close'].iloc[0] * 100.
+        return data
+
+class TurnOfMonthStrategy():
+    def __init__(self, security_name, start, end):
+        self.security_name = security_name
+        self.start = start
+        self.end = end
+
+    def download_data(self):
+        security = yf.Ticker(self.security_name)
+        data = security.history(interval='1d', start=self.start, end=self.end)
+        return data
+    def calculate_trading_days(self, result):
+        result["trading_days_in_month"] = result.groupby(pd.Grouper(freq='M')).transform("size")
+        result["trading_days_in_month"]
+        result["constant"] =1
+        result["trading_day_of_month"] = result.groupby(pd.Grouper(freq='M'))[["constant"]].transform("cumsum")
+        result["trading_days_til_month_end"] = result["trading_days_in_month"] - result["trading_day_of_month"]
+        result["trading_days_til_month_end"]
+    def my_strategy_signal(self, result):
+        import numpy as np
+        signal = np.where(result['trading_days_til_month_end'] <= 4, 1, np.where(result['trading_day_of_month'] <= 2, 1, 0))
+        return signal
+
+    def run(self):
+        self.result = self.download_data()
+        self.calculate_trading_days(self.result)
+        equity_curve = self.calculate(self.result)
+
+        plt.plot(equity_curve['Cumulative Returns'])
+        return equity_curve
+    def calculate(self, result):
+        my_strategy_signal = self.my_strategy_signal(result)
+        result['Signal'] = my_strategy_signal
+        equity_curve = self.get_equity_curve2(result)
+        return equity_curve
     def get_signals(self, data, indicator):
         signal = np.where(data.Close > indicator, 1, np.where(data.Close < indicator, -1, 0))
         return signal
